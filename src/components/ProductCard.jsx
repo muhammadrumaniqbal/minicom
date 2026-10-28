@@ -2,6 +2,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
   Heart,
@@ -17,6 +18,7 @@ export default function ProductCard({
   categoryName,
   onAddToCart,
 }) {
+  const router = useRouter();
   const { isWishlisted, toggleWishlist, hydrated } = useWishlist();
 
   const productId = String(product._id || product.id);
@@ -45,18 +47,73 @@ export default function ProductCard({
       maximumFractionDigits: 0,
     }).format(Number(amount) || 0);
 
-  function handleWishlistClick(event) {
+  // Check the current session using your existing authentication API.
+  async function requireCustomer() {
+    try {
+      const response = await fetch("/api/auth/me", {
+        method: "GET",
+        credentials: "same-origin",
+        cache: "no-store",
+      });
+
+      if (!response.ok) {
+        router.push("/login");
+        return false;
+      }
+
+      const data = await response.json();
+
+      if (
+        data.authenticated !== true ||
+        data.role !== "customer"
+      ) {
+        router.push("/login");
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error("Could not verify customer session:", error);
+      toast.error("Unable to verify your login. Please try again.");
+      return false;
+    }
+  }
+
+  async function handleWishlistClick(event) {
     event.preventDefault();
     event.stopPropagation();
 
+    if (!hydrated) return;
+
+    const allowed = await requireCustomer();
+
+    if (!allowed) return;
+
     const wasLiked = isWishlisted(productId);
-    toggleWishlist({ ...product, image });
+
+    toggleWishlist({ ...product, id: productId, image });
 
     toast.success(
       wasLiked
         ? "Removed from your wishlist"
         : "Added to your wishlist"
     );
+  }
+
+  async function handleAddToCart(event) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const allowed = await requireCustomer();
+
+    if (!allowed) return;
+
+    if (outOfStock) {
+      toast.error("This product is out of stock.");
+      return;
+    }
+
+    onAddToCart?.(product);
   }
 
   return (
@@ -129,7 +186,7 @@ export default function ProductCard({
           <motion.button
             type="button"
             whileTap={{ scale: 0.98 }}
-            onClick={() => onAddToCart?.(product)}
+            onClick={handleAddToCart}
             disabled={outOfStock}
             className="flex w-full items-center justify-center gap-2 rounded-xl bg-white/95 px-4 py-3.5 text-xs font-semibold tracking-[0.08em] text-[#302c25] shadow-sm backdrop-blur-sm transition duration-300 hover:bg-[#302c25] hover:text-white disabled:cursor-not-allowed disabled:bg-stone-300 disabled:text-stone-600 sm:translate-y-2 sm:opacity-0 sm:group-hover:translate-y-0 sm:group-hover:opacity-100 focus-visible:translate-y-0 focus-visible:opacity-100"
           >

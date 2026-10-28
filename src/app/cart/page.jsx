@@ -2,6 +2,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCart } from "@/context/CartContext";
 import {
   ShoppingBag,
@@ -24,6 +25,7 @@ export default function CartPage() {
     totalPrice,
   } = useCart();
 
+  const router = useRouter();
   const money = (amount) =>
     new Intl.NumberFormat("en-PK", {
       style: "currency",
@@ -222,15 +224,13 @@ export default function CartPage() {
             </div>
 
             <button
-              type="button"
-              onClick={() =>
-                alert("Checkout functionality will be added next!")
-              }
-              className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-neutral-900 px-5 py-3.5 text-sm font-semibold text-white transition hover:bg-neutral-700"
-            >
-              <ShoppingCart size={18} />
-              Proceed to checkout
-            </button>
+  type="button"
+  onClick={() => router.push("/checkout")}
+  className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-neutral-900 px-5 py-3.5 text-sm font-semibold text-white transition hover:bg-neutral-700"
+>
+  <ShoppingCart size={18} />
+  Proceed to checkout
+</button>
 
             <Link
               href="/"

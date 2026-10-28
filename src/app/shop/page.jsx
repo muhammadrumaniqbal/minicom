@@ -1,17 +1,56 @@
+
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
-import Link from "next/link";
 import ProductCard from "@/components/ProductCard";
 import {
   Search,
   SlidersHorizontal,
   ArrowUpDown,
   Package,
+  RefreshCw,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { useCart } from "@/context/CartContext";
+
+function ProductSkeleton() {
+  return (
+    <div
+      className="animate-pulse"
+      aria-hidden="true"
+    >
+      {/* Image placeholder */}
+      <div className="relative aspect-[4/5] overflow-hidden rounded-sm bg-neutral-100">
+        <div className="absolute inset-0 -translate-x-full animate-[shimmer_1.8s_infinite] bg-gradient-to-r from-transparent via-white/70 to-transparent" />
+      </div>
+
+      {/* Product information placeholders */}
+      <div className="mt-4 space-y-3">
+        <div className="h-3 w-1/3 rounded bg-neutral-100" />
+        <div className="h-4 w-4/5 rounded bg-neutral-100" />
+        <div className="h-4 w-1/3 rounded bg-neutral-100" />
+
+        <div className="mt-4 h-10 w-full rounded-sm bg-neutral-100" />
+      </div>
+    </div>
+  );
+}
+
+function ProductGridSkeleton() {
+  return (
+    <div
+      className="grid grid-cols-2 gap-x-4 gap-y-8 sm:grid-cols-3 sm:gap-x-6 lg:grid-cols-4 lg:gap-y-10"
+      role="status"
+      aria-label="Loading products"
+    >
+      {Array.from({ length: 8 }).map((_, index) => (
+        <ProductSkeleton key={index} />
+      ))}
+      <span className="sr-only">Loading products...</span>
+    </div>
+  );
+}
 
 export default function ShopPage() {
   const { addToCart } = useCart();
@@ -33,6 +72,8 @@ export default function ShopPage() {
 
   // Fetch products and categories.
   useEffect(() => {
+    let cancelled = false;
+
     async function fetchShopData() {
       try {
         setLoading(true);
@@ -42,6 +83,8 @@ export default function ShopPage() {
           axios.get("/api/product"),
           axios.get("/api/category"),
         ]);
+
+        if (cancelled) return;
 
         setProducts(
           Array.isArray(productResponse.data.res)
@@ -57,14 +100,22 @@ export default function ShopPage() {
 
         setCategories(Array.isArray(categoryData) ? categoryData : []);
       } catch (err) {
+        if (cancelled) return;
+
         console.error("Failed to load shop:", err);
         setError("We couldn't load the products. Please try again.");
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     }
 
     fetchShopData();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Filter and sort products.
@@ -121,6 +172,7 @@ export default function ShopPage() {
     );
   }
 
+  // Preserve the existing PKR price formatter.
   function formatPrice(price) {
     return new Intl.NumberFormat("en-PK", {
       style: "currency",
@@ -162,6 +214,37 @@ export default function ShopPage() {
     setSort("newest");
   }
 
+  async function retryLoading() {
+    setLoading(true);
+    setError("");
+
+    try {
+      const [productResponse, categoryResponse] = await Promise.all([
+        axios.get("/api/product"),
+        axios.get("/api/category"),
+      ]);
+
+      setProducts(
+        Array.isArray(productResponse.data.res)
+          ? productResponse.data.res
+          : []
+      );
+
+      const categoryData =
+        categoryResponse.data.res ||
+        categoryResponse.data.categories ||
+        categoryResponse.data.data ||
+        categoryResponse.data;
+
+      setCategories(Array.isArray(categoryData) ? categoryData : []);
+    } catch (err) {
+      console.error("Failed to reload shop:", err);
+      setError("We couldn't load the products. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
     <main className="min-h-screen bg-white text-neutral-900">
       {/* Shop heading */}
@@ -193,7 +276,7 @@ export default function ShopPage() {
             <input
               type="search"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(event) => setSearch(event.target.value)}
               placeholder="Search products or categories..."
               className="w-full rounded-sm border border-neutral-300 py-3 pl-11 pr-4 text-sm outline-none transition focus:border-yellow-500"
             />
@@ -208,7 +291,7 @@ export default function ShopPage() {
 
               <select
                 value={selectedCategory}
-                onChange={(e) => setSelectedCategory(e.target.value)}
+                onChange={(event) => setSelectedCategory(event.target.value)}
                 aria-label="Filter by category"
                 className="w-full rounded-sm border border-neutral-300 bg-white px-3 py-3 text-sm outline-none focus:border-yellow-500 sm:w-auto"
               >
@@ -230,7 +313,7 @@ export default function ShopPage() {
 
               <select
                 value={sort}
-                onChange={(e) => setSort(e.target.value)}
+                onChange={(event) => setSort(event.target.value)}
                 aria-label="Sort products"
                 className="w-full rounded-sm border border-neutral-300 bg-white px-3 py-3 text-sm outline-none focus:border-yellow-500 sm:w-auto"
               >
@@ -253,9 +336,7 @@ export default function ShopPage() {
               {filteredProducts.length === 1 ? "product" : "products"}
             </p>
 
-            {(search ||
-              selectedCategory !== "all" ||
-              sort !== "newest") && (
+            {(search || selectedCategory !== "all" || sort !== "newest") && (
               <button
                 type="button"
                 onClick={clearFilters}
@@ -267,35 +348,28 @@ export default function ShopPage() {
           </div>
         )}
 
-        {/* Loading skeletons */}
-        {loading && (
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-            {Array.from({ length: 8 }).map((_, index) => (
-              <div key={index} className="animate-pulse">
-                <div className="aspect-[4/5] rounded-sm bg-neutral-100" />
-                <div className="mt-4 h-4 w-3/4 rounded bg-neutral-100" />
-                <div className="mt-3 h-4 w-1/3 rounded bg-neutral-100" />
-              </div>
-            ))}
-          </div>
-        )}
+        {/* Animated product skeletons */}
+        {loading && <ProductGridSkeleton />}
 
         {/* Error state */}
         {!loading && error && (
-          <div className="py-20 text-center">
-            <p className="text-neutral-600">{error}</p>
+          <div className="flex flex-col items-center py-20 text-center">
+            <Package size={35} className="text-neutral-300" />
+
+            <p className="mt-4 text-neutral-600">{error}</p>
 
             <button
               type="button"
-              onClick={() => window.location.reload()}
-              className="mt-4 bg-neutral-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-yellow-400 hover:text-black"
+              onClick={retryLoading}
+              className="mt-5 inline-flex items-center gap-2 bg-neutral-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-yellow-400 hover:text-black"
             >
+              <RefreshCw size={16} />
               Try again
             </button>
           </div>
         )}
 
-        {/* Product grid with reusable wishlist cards */}
+        {/* Product grid */}
         {!loading && !error && filteredProducts.length > 0 && (
           <div className="grid grid-cols-2 gap-x-4 gap-y-8 sm:grid-cols-3 sm:gap-x-6 lg:grid-cols-4 lg:gap-y-10">
             {filteredProducts.map((product) => {
@@ -324,9 +398,7 @@ export default function ShopPage() {
           <div className="flex flex-col items-center py-20 text-center">
             <Package size={35} className="text-neutral-300" />
 
-            <h2 className="mt-4 text-xl font-semibold">
-              No products found
-            </h2>
+            <h2 className="mt-4 text-xl font-semibold">No products found</h2>
 
             <p className="mt-2 max-w-sm text-sm leading-6 text-neutral-500">
               Try another search term or choose a different category.
@@ -342,6 +414,14 @@ export default function ShopPage() {
           </div>
         )}
       </section>
+
+      <style jsx global>{`
+        @keyframes shimmer {
+          100% {
+            transform: translateX(100%);
+          }
+        }
+      `}</style>
     </main>
   );
 }

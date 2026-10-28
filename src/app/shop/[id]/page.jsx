@@ -2,7 +2,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import axios from "axios";
 import { motion } from "framer-motion";
@@ -21,12 +21,11 @@ import { useWishlist } from "@/context/WishlistContext";
 
 export default function ShopProductDetails() {
   const { id } = useParams();
+  const router = useRouter();
+
   const { addToCart } = useCart();
 
-  const {
-    toggleWishlist,
-    isWishlisted,
-  } = useWishlist();
+  const { toggleWishlist, isWishlisted } = useWishlist();
 
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -36,24 +35,36 @@ export default function ShopProductDetails() {
   useEffect(() => {
     if (!id) return;
 
+    let cancelled = false;
+
     async function fetchProduct() {
       try {
         setLoading(true);
 
         const response = await axios.get(`/api/product/${id}`);
 
+        if (cancelled) return;
+
         setProduct(
           response.data.data || response.data.res || null
         );
       } catch (error) {
+        if (cancelled) return;
+
         console.error("Product fetch failed:", error);
         setProduct(null);
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     }
 
     fetchProduct();
+
+    return () => {
+      cancelled = true;
+    };
   }, [id]);
 
   const images = Array.isArray(product?.images)
@@ -64,7 +75,7 @@ export default function ShopProductDetails() {
         .filter(Boolean)
     : [];
 
-  const stock = Number(product?.stock || 0);
+  const stock = Math.max(0, Number(product?.stock) || 0);
 
   const productId = product
     ? String(product._id || product.id || "")
@@ -81,8 +92,46 @@ export default function ShopProductDetails() {
       maximumFractionDigits: 0,
     }).format(Number(price || 0));
 
-  function handleWishlist() {
-    if (!product) return;
+  // Use the response format returned by /api/auth/me.
+  async function requireCustomer() {
+    try {
+      const response = await fetch("/api/auth/me", {
+        method: "GET",
+        credentials: "same-origin",
+        cache: "no-store",
+      });
+
+      if (!response.ok) {
+        router.push("/login");
+        return false;
+      }
+
+      const data = await response.json();
+
+      if (
+        data.authenticated !== true ||
+        data.role !== "customer"
+      ) {
+        router.push("/login");
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error("Could not verify customer session:", error);
+      toast.error("Unable to verify your login. Please try again.");
+      return false;
+    }
+  }
+
+  async function handleWishlist() {
+    if (!product || !productId) return;
+
+    const allowed = await requireCustomer();
+
+    if (!allowed) return;
+
+    const wasWishlisted = isWishlisted(productId);
 
     toggleWishlist({
       ...product,
@@ -91,13 +140,19 @@ export default function ShopProductDetails() {
     });
 
     toast.success(
-      wishlisted
+      wasWishlisted
         ? "Removed from wishlist"
         : "Added to wishlist!"
     );
   }
 
-  function handleAddToCart() {
+  async function handleAddToCart() {
+    const allowed = await requireCustomer();
+
+    if (!allowed) return;
+
+    if (!product) return;
+
     if (stock <= 0) {
       toast.error("This product is out of stock.");
       return;
@@ -195,6 +250,8 @@ export default function ShopProductDetails() {
                     key={`${image}-${index}`}
                     type="button"
                     onClick={() => setSelectedImage(index)}
+                    aria-label={`View product image ${index + 1}`}
+                    aria-pressed={selectedImage === index}
                     className={`overflow-hidden border-2 ${
                       selectedImage === index
                         ? "border-black"
@@ -251,9 +308,7 @@ export default function ShopProductDetails() {
               >
                 <Heart
                   size={22}
-                  className={
-                    wishlisted ? "fill-current" : ""
-                  }
+                  className={wishlisted ? "fill-current" : ""}
                 />
               </button>
             </div>
@@ -274,9 +329,7 @@ export default function ShopProductDetails() {
               Availability:{" "}
               <span
                 className={
-                  stock > 0
-                    ? "text-green-700"
-                    : "text-red-600"
+                  stock > 0 ? "text-green-700" : "text-red-600"
                 }
               >
                 {stock > 0 ? "In stock" : "Out of stock"}

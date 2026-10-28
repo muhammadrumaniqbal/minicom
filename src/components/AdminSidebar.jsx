@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import LogoutButton from "@/components/LogoutButton";
 import { useState } from "react";
 import {
   LayoutDashboard,
@@ -198,6 +199,7 @@ export default function AdminSidebar() {
             onClick={() => setMobileOpen(false)}
             className="absolute inset-0 h-full w-full bg-black/50"
           />
+          <LogoutButton className="w-full justify-center bg-[#493728] text-white hover:bg-[#30251e]" />
 
           <aside className="absolute inset-y-0 left-0 w-[280px] max-w-[85vw] shadow-2xl">
             <SidebarContent mobile />

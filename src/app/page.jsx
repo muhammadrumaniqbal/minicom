@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -6,7 +7,7 @@ import ProductCard from "@/components/ProductCard";
 import { motion } from "framer-motion";
 import StackedCards from "@/components/StackCards";
 import CategoryGrid from "@/components/CategoryGrid";
-import { Search, Package, Loader2 } from "lucide-react";
+import { Search, Package, RefreshCw } from "lucide-react";
 import toast from "react-hot-toast";
 import { useCart } from "@/context/CartContext";
 
@@ -26,6 +27,40 @@ const cardVariants = {
   },
 };
 
+// Animated placeholder for a single product card.
+function ProductSkeleton() {
+  return (
+    <div className="min-w-0 animate-pulse" aria-hidden="true">
+      <div className="relative aspect-[4/5] overflow-hidden bg-stone-100">
+        <div className="absolute inset-0 -translate-x-full animate-[shimmer_1.8s_infinite] bg-gradient-to-r from-transparent via-white/80 to-transparent" />
+      </div>
+
+      <div className="mt-4 space-y-3">
+        <div className="h-3 w-1/3 rounded-sm bg-stone-100" />
+        <div className="h-4 w-4/5 rounded-sm bg-stone-100" />
+        <div className="h-4 w-1/3 rounded-sm bg-stone-100" />
+        <div className="mt-4 h-10 w-full rounded-sm bg-stone-100" />
+      </div>
+    </div>
+  );
+}
+
+// Responsive grid matching the real product grid.
+function ProductGridSkeleton() {
+  return (
+    <div
+      className="grid grid-cols-1 gap-x-5 gap-y-10 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+      role="status"
+      aria-label="Loading product collection"
+    >
+      {Array.from({ length: 8 }).map((_, index) => (
+        <ProductSkeleton key={index} />
+      ))}
+      <span className="sr-only">Loading products...</span>
+    </div>
+  );
+}
+
 export default function HomePage() {
   const { addToCart } = useCart();
 
@@ -37,32 +72,38 @@ export default function HomePage() {
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [sort, setSort] = useState("newest");
 
-  useEffect(() => {
-    async function fetchData() {
-      try {
-        setLoading(true);
-        setError("");
+  async function fetchData() {
+    try {
+      setLoading(true);
+      setError("");
 
-        const [productResponse, categoryResponse] = await Promise.all([
-          axios.get("/api/product"),
-          axios.get("/api/category"),
-        ]);
+      const [productResponse, categoryResponse] = await Promise.all([
+        axios.get("/api/product"),
+        axios.get("/api/category"),
+      ]);
 
-        setProducts(productResponse.data.res || []);
+      setProducts(
+        Array.isArray(productResponse.data.res)
+          ? productResponse.data.res
+          : []
+      );
 
-        setCategories(
-          categoryResponse.data.res ||
-            categoryResponse.data.data ||
-            []
-        );
-      } catch (err) {
-        console.error("Failed to load homepage data:", err);
-        setError("We couldn't load the products. Please try again.");
-      } finally {
-        setLoading(false);
-      }
+      const categoryData =
+        categoryResponse.data.res ||
+        categoryResponse.data.data ||
+        categoryResponse.data.categories ||
+        [];
+
+      setCategories(Array.isArray(categoryData) ? categoryData : []);
+    } catch (err) {
+      console.error("Failed to load homepage data:", err);
+      setError("We couldn't load the products. Please try again.");
+    } finally {
+      setLoading(false);
     }
+  }
 
+  useEffect(() => {
     fetchData();
   }, []);
 
@@ -70,10 +111,10 @@ export default function HomePage() {
     let result = [...products];
 
     if (search.trim()) {
+      const query = search.trim().toLowerCase();
+
       result = result.filter((product) =>
-        (product.title || "")
-          .toLowerCase()
-          .includes(search.trim().toLowerCase())
+        String(product.title || "").toLowerCase().includes(query)
       );
     }
 
@@ -89,13 +130,14 @@ export default function HomePage() {
     }
 
     if (sort === "lowToHigh") {
-      result.sort((a, b) => Number(a.price) - Number(b.price));
+      result.sort((a, b) => Number(a.price || 0) - Number(b.price || 0));
     } else if (sort === "highToLow") {
-      result.sort((a, b) => Number(b.price) - Number(a.price));
+      result.sort((a, b) => Number(b.price || 0) - Number(a.price || 0));
     } else {
       result.sort(
         (a, b) =>
-          new Date(b.createdAt || 0) - new Date(a.createdAt || 0)
+          new Date(b.createdAt || 0).getTime() -
+          new Date(a.createdAt || 0).getTime()
       );
     }
 
@@ -175,25 +217,25 @@ export default function HomePage() {
           </p>
         </motion.div>
 
+        {/* Search and filters */}
         <div className="mb-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <div className="flex items-center border border-stone-200 px-4 py-3">
-            <Search
-              size={18}
-              className="mr-3 shrink-0 text-stone-400"
-            />
+            <Search size={18} className="mr-3 shrink-0 text-stone-400" />
 
             <input
               type="text"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(event) => setSearch(event.target.value)}
               placeholder="Search products..."
+              aria-label="Search products"
               className="w-full bg-transparent text-sm outline-none placeholder:text-stone-400"
             />
           </div>
 
           <select
             value={selectedCategory}
-            onChange={(e) => setSelectedCategory(e.target.value)}
+            onChange={(event) => setSelectedCategory(event.target.value)}
+            aria-label="Filter by category"
             className="border border-stone-200 bg-white px-4 py-3 text-sm outline-none"
           >
             <option value="all">All categories</option>
@@ -207,7 +249,8 @@ export default function HomePage() {
 
           <select
             value={sort}
-            onChange={(e) => setSort(e.target.value)}
+            onChange={(event) => setSort(event.target.value)}
+            aria-label="Sort products"
             className="border border-stone-200 bg-white px-4 py-3 text-sm outline-none"
           >
             <option value="newest">Newest first</option>
@@ -216,11 +259,14 @@ export default function HomePage() {
           </select>
         </div>
 
-        <div className="mb-5 flex items-center justify-between">
+        {/* Product count and filter reset */}
+        <div className="mb-5 flex min-h-5 items-center justify-between">
           <p className="text-xs text-stone-500">
             {loading
-              ? "Loading collection..."
-              : `${filteredProducts.length} products`}
+              ? "Preparing your collection..."
+              : !error
+                ? `${filteredProducts.length} products`
+                : "Collection unavailable"}
           </p>
 
           {(search ||
@@ -236,29 +282,26 @@ export default function HomePage() {
           )}
         </div>
 
-        {loading && (
-          <div className="flex min-h-64 items-center justify-center">
-            <Loader2
-              size={34}
-              className="animate-spin text-stone-600"
-            />
-          </div>
-        )}
+        {/* Product loading skeleton */}
+        {loading && <ProductGridSkeleton />}
 
+        {/* Error state */}
         {!loading && error && (
           <div className="py-16 text-center">
             <p className="text-sm text-red-600">{error}</p>
 
             <button
               type="button"
-              onClick={() => window.location.reload()}
-              className="mt-4 border border-stone-800 px-5 py-3 text-xs font-semibold"
+              onClick={fetchData}
+              className="mt-4 inline-flex items-center gap-2 border border-stone-800 px-5 py-3 text-xs font-semibold transition hover:bg-stone-800 hover:text-white"
             >
+              <RefreshCw size={15} />
               TRY AGAIN
             </button>
           </div>
         )}
 
+        {/* Loaded products */}
         {!loading && !error && filteredProducts.length > 0 && (
           <motion.div
             variants={gridVariants}
@@ -273,15 +316,11 @@ export default function HomePage() {
                   ? product.category?.title
                   : categories.find(
                       (category) =>
-                        String(category._id) ===
-                        String(product.category)
+                        String(category._id) === String(product.category)
                     )?.title;
 
               return (
-                <motion.div
-                  key={product._id}
-                  variants={cardVariants}
-                >
+                <motion.div key={product._id} variants={cardVariants}>
                   <ProductCard
                     product={product}
                     categoryName={categoryName}
@@ -293,8 +332,7 @@ export default function HomePage() {
           </motion.div>
         )}
 
-        <StackedCards />
-
+        {/* Empty state */}
         {!loading && !error && filteredProducts.length === 0 && (
           <div className="border border-dashed border-stone-300 px-6 py-16 text-center">
             <Package
@@ -302,9 +340,7 @@ export default function HomePage() {
               className="mx-auto mb-4 text-stone-400"
             />
 
-            <h3 className="text-lg font-medium">
-              No products found
-            </h3>
+            <h3 className="text-lg font-medium">No products found</h3>
 
             <p className="mt-2 text-sm text-stone-500">
               Try another search or select a different category.
@@ -319,7 +355,18 @@ export default function HomePage() {
             </button>
           </div>
         )}
+
+        {/* Keep the existing stacked-card section */}
+        <StackedCards />
       </section>
+
+      <style jsx global>{`
+        @keyframes shimmer {
+          100% {
+            transform: translateX(100%);
+          }
+        }
+      `}</style>
     </main>
   );
 }

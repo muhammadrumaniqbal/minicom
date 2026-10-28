@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -26,24 +27,38 @@ export default function Navbar() {
 
   const wishlistCount = wishlist.length;
 
-  // Fetch products once when the navbar loads.
+  // Fetch products for the live search dropdown.
   useEffect(() => {
+    let cancelled = false;
+
     async function fetchProducts() {
       try {
         const response = await axios.get("/api/product");
 
+        if (cancelled) return;
+
         setProducts(
-          Array.isArray(response.data.res) ? response.data.res : []
+          Array.isArray(response.data.res)
+            ? response.data.res
+            : []
         );
       } catch (error) {
-        console.error("Failed to load search products:", error);
-        setProducts([]);
+        if (!cancelled) {
+          console.error("Failed to load search products:", error);
+          setProducts([]);
+        }
       } finally {
-        setLoadingProducts(false);
+        if (!cancelled) {
+          setLoadingProducts(false);
+        }
       }
     }
 
     fetchProducts();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Filter live search results.
@@ -66,14 +81,16 @@ export default function Navbar() {
       .slice(0, 6);
   }, [search, products]);
 
-  function handleSearch(e) {
-    e?.preventDefault();
+  function handleSearch(event) {
+    event?.preventDefault();
 
     const query = search.trim();
 
     if (!query) return;
 
     setMenuOpen(false);
+    setSearch("");
+
     window.location.href = `/shop?search=${encodeURIComponent(query)}`;
   }
 
@@ -96,6 +113,11 @@ export default function Navbar() {
       maximumFractionDigits: 0,
     }).format(Number(price) || 0);
   }
+
+  const menuItems = [
+    { name: "Home", href: "/" },
+    { name: "Shop", href: "/shop" },
+  ];
 
   return (
     <header className="absolute left-0 top-0 z-50 w-full bg-transparent">
@@ -147,7 +169,7 @@ export default function Navbar() {
               <input
                 type="search"
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                onChange={(event) => setSearch(event.target.value)}
                 placeholder="Search products..."
                 aria-label="Search products"
                 autoComplete="off"
@@ -187,10 +209,14 @@ export default function Navbar() {
                           ? product.category?.title
                           : "";
 
+                      const productId = String(
+                        product._id || product.id
+                      );
+
                       return (
                         <Link
-                          key={product._id}
-                          href={`/shop/${product._id}`}
+                          key={productId}
+                          href={`/shop/${productId}`}
                           onClick={() => {
                             setSearch("");
                             setMenuOpen(false);
@@ -279,8 +305,8 @@ export default function Navbar() {
         {/* Account, wishlist and shopping bag */}
         <div className="flex shrink-0 items-center gap-3 sm:gap-5 lg:gap-7">
           <Link
-            href="/admin"
-            aria-label="Account"
+            href="/sign-in"
+            aria-label="Account and sign-in options"
             className="group flex items-center gap-2 text-white transition-colors duration-300 hover:text-yellow-400"
           >
             <Contact size={23} strokeWidth={1.7} />
@@ -347,7 +373,7 @@ export default function Navbar() {
         </p>
       </div>
 
-      {/* Dropdown menu */}
+      {/* Dropdown menu: public browsing only */}
       <div
         className={`absolute left-0 top-full w-full border-t border-white/10 bg-neutral-950/95 backdrop-blur-xl transition-all duration-300 ${
           menuOpen
@@ -356,13 +382,7 @@ export default function Navbar() {
         }`}
       >
         <div className="mx-auto flex max-w-[1600px] flex-col gap-1 px-8 py-5 md:flex-row md:gap-8 md:px-14">
-          {[
-            { name: "Home", href: "/" },
-            { name: "Shop", href: "/shop" },
-            { name: "Categories", href: "/categories" },
-            { name: "Wishlist", href: "/wishlist" },
-            { name: "Contact", href: "/contact" },
-          ].map((item) => (
+          {menuItems.map((item) => (
             <Link
               key={item.name}
               href={item.href}
@@ -370,12 +390,6 @@ export default function Navbar() {
               className="flex items-center justify-between py-3 text-sm font-medium text-white transition-colors duration-300 hover:text-yellow-400"
             >
               <span>{item.name}</span>
-
-              {item.name === "Wishlist" && wishlistCount > 0 && (
-                <span className="ml-3 rounded-full bg-yellow-400 px-2 py-1 text-[10px] font-bold text-black">
-                  {wishlistCount}
-                </span>
-              )}
             </Link>
           ))}
         </div>
