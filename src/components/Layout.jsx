@@ -3,6 +3,7 @@
 
 import { useEffect, useRef } from "react";
 import { usePathname, useRouter } from "next/navigation";
+
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import Hero from "@/components/Hero";
@@ -22,8 +23,8 @@ export default function Layout({ children }) {
   const isHome = pathname === "/";
 
   useEffect(() => {
-    // Run this check once when the app layout mounts.
     if (hasCheckedSession.current) return;
+
     hasCheckedSession.current = true;
 
     const wasPageReloaded =
@@ -46,7 +47,7 @@ export default function Layout({ children }) {
 
         const session = await sessionResponse.json();
 
-        // Do not log out admins when the page is refreshed.
+        // Admin sessions remain active after a page refresh.
         if (session.authenticated && session.role === "customer") {
           await fetch("/api/auth/logout", {
             method: "POST",
@@ -70,6 +71,7 @@ export default function Layout({ children }) {
     };
   }, [router]);
 
+  // Admin login page
   if (isAdminLogin) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-[#f5f1ea] px-5 py-12">
@@ -78,18 +80,20 @@ export default function Layout({ children }) {
     );
   }
 
+  // Admin layout
   if (isAdmin) {
     return (
-      <div className="flex min-h-screen w-full bg-[#f5f1ea]">
+      <div className="flex min-h-screen w-full flex-col overflow-x-hidden bg-[#f5f1ea] md:flex-row">
         <AdminSidebar />
 
-        <div className="min-h-screen min-w-0 flex-1">
+        <main className="min-h-screen w-full min-w-0 flex-1 overflow-x-hidden">
           {children}
-        </div>
+        </main>
       </div>
     );
   }
 
+  // Customer storefront layout
   return (
     <>
       <Navbar />
